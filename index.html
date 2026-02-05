@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BrewCare Status</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex; justify-content: center; align-items: center;
+      min-height: 100vh; margin: 0;
+      background: #f9f6f0;
+      color: #5a4a42;
+    }
+    .card {
+      text-align: center;
+      padding: 2rem;
+      border-radius: 16px;
+      background: white;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+      max-width: 340px;
+      width: 90%;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 1.4rem; font-weight: 600; }
+    .row { margin: 0.7rem 0; line-height: 1.4; }
+    .label { font-size: 0.85rem; color: #8c7b6b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .value { font-size: 1.15rem; font-weight: 500; margin-top: 0.2rem; }
+    .status.on-time { color: #4caf50; font-weight: 600; }
+    .status.overdue { color: #f44336; font-weight: 600; }
+    .machine-id { font-size: 0.8rem; color: #aaa; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>☕ BrewCare</h1>
+    
+    <div class="row">
+      <div class="label">Last cleaned</div>
+      <div class="value" id="last">—</div>
+    </div>
+    
+    <div class="row">
+      <div class="label">Next scheduled</div>
+      <div class="value" id="next">—</div>
+    </div>
+    
+    <div class="row">
+      <div class="label">Status</div>
+      <div class="value" id="status">Loading...</div>
+    </div>
+
+    <div class="machine-id" id="machineId"></div>
+  </div>
+
+  <script>
+    // Получаем machine ID из URL: ?id=espresso-pro
+    const urlParams = new URLSearchParams(window.location.search);
+    const machineId = urlParams.get('id') || 'espresso-pro';
+
+    // Временные данные (позже заменим на Google Sheets API)
+    const data = {
+      'espresso-pro': {
+        last: 'Feb 5, 2026',
+        next: 'Feb 8, 2026',
+        status: '✅ On schedule',
+        statusClass: 'on-time'
+      }
+    };
+
+    const machine = data[machineId] || null;
+
+    if (machine) {
+      document.getElementById('last').textContent = machine.last;
+      document.getElementById('next').textContent = machine.next;
+      document.getElementById('status').textContent = machine.status;
+      document.getElementById('status').className = 'value status ' + machine.statusClass;
+      document.getElementById('machineId').textContent = 'Machine: ' + machineId;
+    } else {
+      document.getElementById('last').textContent = '—';
+      document.getElementById('next').textContent = '—';
+      document.getElementById('status').textContent = '❌ Not found';
+      document.getElementById('status').className = 'value status overdue';
+      document.getElementById('machineId').textContent = 'ID: ' + machineId;
+    }
+  </script>
+</body>
+</html>
