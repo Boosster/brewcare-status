@@ -49,39 +49,50 @@
       <div class="value" id="status">Loading...</div>
     </div>
 
-    <div class="machine-id" id="machineId"></div>
+    <div class="machine-id" id="machineName"></div>
   </div>
 
   <script>
-    // Получаем machine ID из URL: ?id=espresso-pro
+  (function() {
     const urlParams = new URLSearchParams(window.location.search);
-    const machineId = urlParams.get('id') || 'espresso-pro';
+    const machineId = urlParams.get('id') || 'default';
 
-    // Временные данные (позже заменим на Google Sheets API)
-    const data = {
-      'espresso-pro': {
+    // --- ДАННЫЕ ДЛЯ MVP (обновляй вручную) ---
+    const machines = {
+      'SN-8472-BX': {
+        displayName: 'Espresso Pro • 2F Office',
         last: 'Feb 5, 2026',
         next: 'Feb 8, 2026',
         status: '✅ On schedule',
         statusClass: 'on-time'
+      },
+      'SN-9103-KL': {
+        displayName: 'Vending X • Lobby',
+        last: 'Feb 3, 2026',
+        next: 'Feb 10, 2026',
+        status: '⚠️ Due soon',
+        statusClass: 'overdue' // или 'on-time', как нужно
       }
+      // Добавляй сюда новые машины по мере роста
     };
+    // -----------------------------------------
 
-    const machine = data[machineId] || null;
+    const machine = machines[machineId];
 
     if (machine) {
       document.getElementById('last').textContent = machine.last;
       document.getElementById('next').textContent = machine.next;
       document.getElementById('status').textContent = machine.status;
       document.getElementById('status').className = 'value status ' + machine.statusClass;
-      document.getElementById('machineId').textContent = 'Machine: ' + machineId;
+      document.getElementById('machineName').textContent = machine.displayName;
     } else {
       document.getElementById('last').textContent = '—';
       document.getElementById('next').textContent = '—';
       document.getElementById('status').textContent = '❌ Not found';
       document.getElementById('status').className = 'value status overdue';
-      document.getElementById('machineId').textContent = 'ID: ' + machineId;
+      document.getElementById('machineName').textContent = 'ID: ' + machineId;
     }
-  </script>
+  })();
+</script>
 </body>
 </html>
