@@ -1,90 +1,118 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>BrewCare Status</title>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex; justify-content: center; align-items: center;
-      min-height: 100vh; margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #f9f6f0;
       color: #5a4a42;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 0 20px;
+      line-height: 1.6;
     }
-    .card {
-      text-align: center;
-      padding: 2rem;
-      border-radius: 16px;
+    .header { text-align: center; margin-bottom: 30px; }
+    .status-card {
       background: white;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
-      max-width: 340px;
-      width: 90%;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
     }
-    h1 { font-size: 1.5rem; margin: 0 0 1.4rem; font-weight: 600; }
-    .row { margin: 0.7rem 0; line-height: 1.4; }
-    .label { font-size: 0.85rem; color: #8c7b6b; text-transform: uppercase; letter-spacing: 0.5px; }
-    .value { font-size: 1.15rem; font-weight: 500; margin-top: 0.2rem; }
-    .status.on-time { color: #4caf50; font-weight: 600; }
-    .status.overdue { color: #f44336; font-weight: 600; }
-    .machine-id { font-size: 0.8rem; color: #aaa; margin-top: 1rem; }
+    .loading { text-align: center; color: #8c7b6b; }
+    .error { color: #c0392b; text-align: center; }
+    .field { margin: 12px 0; }
+    .label { font-weight: 600; color: #8c7b6b; font-size: 0.9em; }
+    .value { font-size: 1.1em; }
+    .footer {
+      text-align: center;
+      margin-top: 30px;
+      font-size: 0.85em;
+      color: #8c7b6b;
+    }
   </style>
 </head>
 <body>
-  <div class="card">
+  <div class="header">
     <h1>☕ BrewCare</h1>
-    
-    <div class="row">
-      <div class="label">Last cleaned</div>
-      <div class="value" id="last">—</div>
-    </div>
-    
-    <div class="row">
-      <div class="label">Next scheduled</div>
-      <div class="value" id="next">—</div>
-    </div>
-    
-    <div class="row">
-      <div class="label">Status</div>
-      <div class="value" id="status">Loading...</div>
-    </div>
+    <p>Maintenance status for your coffee machine</p>
+  </div>
 
-    <div class="machine-id" id="machineName"></div>
+  <div id="content">
+    <div class="loading">Loading...</div>
+  </div>
+
+  <div class="footer">
+    Transparent maintenance tracking • brewcare.status
   </div>
 
   <script>
-    (function() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const machineId = urlParams.get('id') || 'espresso-pro';
+    // Укажи СЮДА свою публичную CSV-ссылку
+    const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR8CeaszDDfqRv2feolE19N9eO3rIoWfw9mXP4TJBuTx-o4d2FHrmWph5c6rS3TiAX1kQf1JlbHOCu2/pub?gid=773665611&single=true&output=csv";
 
-      const machines = {
-        'espresso-pro': {
-          displayName: 'Espresso Pro • 2F Office',
-          last: 'Feb 5, 2026',
-          next: 'Feb 8, 2026',
-          status: '✅ On schedule',
-          statusClass: 'on-time'
-        }
-      };
+    // Получаем Machine ID из URL (?id=espresso-pro)
+    const urlParams = new URLSearchParams(window.location.search);
+    const machineId = urlParams.get('id');
 
-      const machine = machines[machineId];
+    const contentDiv = document.getElementById('content');
 
-      if (machine) {
-        document.getElementById('last').textContent = machine.last;
-        document.getElementById('next').textContent = machine.next;
-        const statusEl = document.getElementById('status');
-        statusEl.textContent = machine.status;
-        statusEl.className = 'value status ' + machine.statusClass;
-        document.getElementById('machineName').textContent = machine.displayName;
-      } else {
-        document.getElementById('last').textContent = '—';
-        document.getElementById('next').textContent = '—';
-        const statusEl = document.getElementById('status');
-        statusEl.textContent = '❌ Not found: ' + machineId;
-        statusEl.className = 'value status overdue';
-        document.getElementById('machineName').textContent = 'ID: ' + machineId;
-      }
-    })();
+    if (!machineId) {
+      contentDiv.innerHTML = `<div class="error">❌ Machine ID not specified.<br>Use: ?id=your-machine-id</div>`;
+    } else {
+      fetch(SHEET_URL)
+        .then(response => response.text())
+        .then(csv => {
+          const lines = csv.trim().split('\n');
+          const headers = lines[0].split(',').map(h => h.replace(/"/g, ''));
+          const idIndex = headers.indexOf('id');
+          const lastCleanedIndex = headers.indexOf('last_cleaned');
+          const nextDueIndex = headers.indexOf('next_due');
+          const statusIndex = headers.indexOf('status');
+
+          let found = false;
+          for (let i = 1; i < lines.length; i++) {
+            const row = lines[i].split(',').map(cell => cell.replace(/"/g, ''));
+            if (row[idIndex] === machineId) {
+              const lastCleaned = row[lastCleanedIndex] || '—';
+              const nextDue = row[nextDueIndex] || '—';
+              const status = row[statusIndex] || 'Unknown';
+
+              contentDiv.innerHTML = `
+                <div class="status-card">
+                  <div class="field">
+                    <div class="label">Machine ID</div>
+                    <div class="value">${machineId}</div>
+                  </div>
+                  <div class="field">
+                    <div class="label">Last cleaned</div>
+                    <div class="value">${lastCleaned}</div>
+                  </div>
+                  <div class="field">
+                    <div class="label">Next due</div>
+                    <div class="value">${nextDue}</div>
+                  </div>
+                  <div class="field">
+                    <div class="label">Status</div>
+                    <div class="value">${status}</div>
+                  </div>
+                </div>
+              `;
+              found = true;
+              break;
+            }
+          }
+
+          if (!found) {
+            contentDiv.innerHTML = `<div class="error">⚠️ Machine ID "${machineId}" not found.</div>`;
+          }
+        })
+        .catch(err => {
+          console.error('Error loading data:', err);
+          contentDiv.innerHTML = `<div class="error">❌ Failed to load status.<br>Please try again later.</div>`;
+        });
+    }
   </script>
 </body>
 </html>
