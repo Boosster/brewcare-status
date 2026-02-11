@@ -49,13 +49,10 @@
   </div>
 
   <script>
-    // Укажи СЮДА свою публичную CSV-ссылку
-    const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR8CeaszDDfqRv2feolE19N9eO3rIoWfw9mXP4TJBuTx-o4d2FHrmWph5c6rS3TiAX1kQf1JlbHOCu2/pub?gid=773665611&single=true&output=csv";
+    const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR8CeaszDDfqRv2feolE19N9eO3rIoWfw9mXP4TJBuTx-o4d2FHrmWph5c6rS3TiAX1kQf1JlbHOCu2/pub?output=csv";
 
-    // Получаем Machine ID из URL (?id=espresso-pro)
     const urlParams = new URLSearchParams(window.location.search);
     const machineId = urlParams.get('id');
-
     const contentDiv = document.getElementById('content');
 
     if (!machineId) {
@@ -65,7 +62,7 @@
         .then(response => response.text())
         .then(csv => {
           const lines = csv.trim().split('\n');
-          const headers = lines[0].split(',').map(h => h.replace(/"/g, ''));
+          const headers = lines[0].split(',').map(h => h.replace(/^"(.*)"$/, '$1').trim());
           const idIndex = headers.indexOf('id');
           const lastCleanedIndex = headers.indexOf('last_cleaned');
           const nextDueIndex = headers.indexOf('next_due');
@@ -73,7 +70,7 @@
 
           let found = false;
           for (let i = 1; i < lines.length; i++) {
-            const row = lines[i].split(',').map(cell => cell.replace(/"/g, ''));
+            const row = lines[i].split(',').map(cell => cell.trim().replace(/^"(.*)"$/, '$1'));
             if (row[idIndex] === machineId) {
               const lastCleaned = row[lastCleanedIndex] || '—';
               const nextDue = row[nextDueIndex] || '—';
@@ -82,15 +79,11 @@
               contentDiv.innerHTML = `
                 <div class="status-card">
                   <div class="field">
-                    <div class="label">Machine ID</div>
-                    <div class="value">${machineId}</div>
-                  </div>
-                  <div class="field">
                     <div class="label">Last cleaned</div>
                     <div class="value">${lastCleaned}</div>
                   </div>
                   <div class="field">
-                    <div class="label">Next due</div>
+                    <div class="label">Next scheduled</div>
                     <div class="value">${nextDue}</div>
                   </div>
                   <div class="field">
@@ -109,7 +102,7 @@
           }
         })
         .catch(err => {
-          console.error('Error loading data:', err);
+          console.error('Error loading status:', err);
           contentDiv.innerHTML = `<div class="error">❌ Failed to load status.<br>Please try again later.</div>`;
         });
     }
