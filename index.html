@@ -62,6 +62,11 @@
         .then(response => response.text())
         .then(csv => {
           const lines = csv.trim().split('\n');
+          if (lines.length < 2) {
+            contentDiv.innerHTML = `<div class="error">⚠️ No data in sheet.</div>`;
+            return;
+          }
+
           const headers = lines[0].split(',').map(h => h.replace(/^"(.*)"$/, '$1').trim());
           const idIndex = headers.indexOf('id');
           const lastCleanedIndex = headers.indexOf('last_cleaned');
@@ -102,8 +107,8 @@
           }
         })
         .catch(err => {
-          console.error('Error loading status:', err);
-          contentDiv.innerHTML = `<div class="error">❌ Failed to load status.<br>Please try again later.</div>`;
+          console.error('Error:', err);
+          contentDiv.innerHTML = `<div class="error">❌ Failed to load data.</div>`;
         });
     }
   </script>
