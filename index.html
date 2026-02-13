@@ -58,25 +58,33 @@ const contentDiv = document.getElementById('content');
 if (!machineId) {
   contentDiv.innerHTML = `<div class="error">❌ Machine ID not specified.<br>Use: ?id=your-machine-id</div>`;
 } else {
-  // ФИКС 1: Добавляем параметр для избегания кэширования
-  fetch(`${SHEET_URL}&_=${Date.now()}`)
+  // ВАЖНО: Правильно формируем URL с антикэш параметром
+  const cacheBuster = Date.now();
+  // Убираем &_= и используем просто параметр
+  const fetchUrl = `${SHEET_URL}&nocache=${cacheBuster}`;
+  
+  console.log('Fetching URL:', fetchUrl); // Для отладки
+  
+  fetch(fetchUrl)
     .then(response => {
-      // ФИКС 2: Проверяем, что получили CSV, а не HTML страницу ошибки
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('text/csv')) {
-        throw new Error('Google returned non-CSV response (possible rate limit or auth issue)');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       return response.text();
     })
     .then(csv => {
-      // ФИКС 3: Более надежный парсинг CSV с учетом кавычек
+      console.log('CSV received, length:', csv.length); // Для отладки
+      
+      if (csv.trim().startsWith('<!DOCTYPE html>')) {
+        throw new Error('Received HTML instead of CSV');
+      }
+
       const lines = csv.trim().split('\n');
       if (lines.length < 2) {
         contentDiv.innerHTML = `<div class="error">⚠️ No data in sheet.</div>`;
         return;
       }
 
-      // ФИКС 4: Простой, но надежный парсинг строк с кавычками
       function parseCSVLine(line) {
         const result = [];
         let inQuotes = false;
@@ -97,30 +105,31 @@ if (!machineId) {
       }
 
       const headers = parseCSVLine(lines[0]);
-      const idIndex = headers.findIndex(h => h.toLowerCase().trim() === 'id');
-      const lastCleanedIndex = headers.findIndex(h => h.toLowerCase().trim() === 'last_cleaned');
-      const nextDueIndex = headers.findIndex(h => h.toLowerCase().trim() === 'next_due');
-      const statusIndex = headers.findIndex(h => h.toLowerCase().trim() === 'status');
+      console.log('Found headers:', headers);
+      
+      // Ищем колонки без учета регистра и лишних пробелов
+      const idIndex = headers.findIndex(h => h.toLowerCase().replace(/[^a-z]/g, '') === 'id');
+      const lastCleanedIndex = headers.findIndex(h => h.toLowerCase().replace(/[^a-z_]/g, '') === 'last_cleaned');
+      const nextDueIndex = headers.findIndex(h => h.toLowerCase().replace(/[^a-z_]/g, '') === 'next_due');
+      const statusIndex = headers.findIndex(h => h.toLowerCase().replace(/[^a-z]/g, '') === 'status');
 
-      // ФИКС 5: Проверяем, что все нужные колонки найдены
+      console.log('Indices:', { idIndex, lastCleanedIndex, nextDueIndex, statusIndex });
+
       if (idIndex === -1) {
-        contentDiv.innerHTML = `<div class="error">⚠️ 'id' column not found in sheet. Headers: ${headers.join(', ')}</div>`;
+        contentDiv.innerHTML = `<div class="error">⚠️ 'id' column not found. Headers: ${headers.join(' | ')}</div>`;
         return;
       }
 
       let found = false;
-      // Нормализуем введенный ID для сравнения
-      const normalizedSearchId = machineId.toString().trim().toLowerCase();
+      const normalizedSearchId = machineId.toString().trim();
       
       for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        
         const row = parseCSVLine(lines[i]);
+        const rowId = row[idIndex] ? row[idIndex].toString().trim() : '';
         
-        // ФИКС 6: Безопасное получение значения ID с нормализацией
-        const rowId = row[idIndex] ? row[idIndex].toString().trim().toLowerCase() : '';
-        
-        // ФИКС 7: Более гибкое сравнение (учитываем пробелы, регистр, тип данных)
         if (rowId && rowId === normalizedSearchId) {
-          // Безопасно получаем значения с проверкой индексов
           const lastCleaned = (lastCleanedIndex !== -1 && row[lastCleanedIndex]) ? row[lastCleanedIndex] : '—';
           const nextDue = (nextDueIndex !== -1 && row[nextDueIndex]) ? row[nextDueIndex] : '—';
           const status = (statusIndex !== -1 && row[statusIndex]) ? row[statusIndex] : 'Unknown';
@@ -155,7 +164,8 @@ if (!machineId) {
       }
     })
     .catch(err => {
-      console.error('Error:', err);
+      console.error('Full error:', err);
       contentDiv.innerHTML = `<div class="error">❌ Failed to load data.<br>${err.message}</div>`;
     });
 }
+</script>
