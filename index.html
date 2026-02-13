@@ -49,68 +49,115 @@
   </div>
 
   <script>
-    const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR8CeaszDDfqRv2feolE19N9eO3rIoWfw9mXP4TJBuTx-o4d2FHrmWph5c6rS3TiAX1kQf1JlbHOCu2/pub?output=csv";
+    // ЗАМЕНИТЕ весь блок script на этот код
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const machineId = urlParams.get('id');
-    const contentDiv = document.getElementById('content');
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR8CeaszDDfqRv2feolE19N9eO3rIoWfw9mXP4TJBuTx-o4d2FHrmWph5c6rS3TiAX1kQf1JlbHOCu2/pub?output=csv";
 
-    if (!machineId) {
-      contentDiv.innerHTML = `<div class="error">❌ Machine ID not specified.<br>Use: ?id=your-machine-id</div>`;
-    } else {
-      fetch(SHEET_URL)
-        .then(response => response.text())
-        .then(csv => {
-          const lines = csv.trim().split('\n');
-          if (lines.length < 2) {
-            contentDiv.innerHTML = `<div class="error">⚠️ No data in sheet.</div>`;
-            return;
+const urlParams = new URLSearchParams(window.location.search);
+const machineId = urlParams.get('id');
+const contentDiv = document.getElementById('content');
+
+if (!machineId) {
+  contentDiv.innerHTML = `<div class="error">❌ Machine ID not specified.<br>Use: ?id=your-machine-id</div>`;
+} else {
+  // ФИКС 1: Добавляем параметр для избегания кэширования
+  fetch(`${SHEET_URL}&_=${Date.now()}`)
+    .then(response => {
+      // ФИКС 2: Проверяем, что получили CSV, а не HTML страницу ошибки
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('text/csv')) {
+        throw new Error('Google returned non-CSV response (possible rate limit or auth issue)');
+      }
+      return response.text();
+    })
+    .then(csv => {
+      // ФИКС 3: Более надежный парсинг CSV с учетом кавычек
+      const lines = csv.trim().split('\n');
+      if (lines.length < 2) {
+        contentDiv.innerHTML = `<div class="error">⚠️ No data in sheet.</div>`;
+        return;
+      }
+
+      // ФИКС 4: Простой, но надежный парсинг строк с кавычками
+      function parseCSVLine(line) {
+        const result = [];
+        let inQuotes = false;
+        let currentCell = '';
+        
+        for (let char of line) {
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            result.push(currentCell.replace(/^"|"$/g, '').trim());
+            currentCell = '';
+          } else {
+            currentCell += char;
           }
+        }
+        result.push(currentCell.replace(/^"|"$/g, '').trim());
+        return result;
+      }
 
-          const headers = lines[0].split(',').map(h => h.replace(/^"(.*)"$/, '$1').trim());
-          const idIndex = headers.indexOf('id');
-          const lastCleanedIndex = headers.indexOf('last_cleaned');
-          const nextDueIndex = headers.indexOf('next_due');
-          const statusIndex = headers.indexOf('status');
+      const headers = parseCSVLine(lines[0]);
+      const idIndex = headers.findIndex(h => h.toLowerCase().trim() === 'id');
+      const lastCleanedIndex = headers.findIndex(h => h.toLowerCase().trim() === 'last_cleaned');
+      const nextDueIndex = headers.findIndex(h => h.toLowerCase().trim() === 'next_due');
+      const statusIndex = headers.findIndex(h => h.toLowerCase().trim() === 'status');
 
-          let found = false;
-          for (let i = 1; i < lines.length; i++) {
-            const row = lines[i].split(',').map(cell => cell.trim().replace(/^"(.*)"$/, '$1'));
-            if (row[idIndex] === machineId) {
-              const lastCleaned = row[lastCleanedIndex] || '—';
-              const nextDue = row[nextDueIndex] || '—';
-              const status = row[statusIndex] || 'Unknown';
+      // ФИКС 5: Проверяем, что все нужные колонки найдены
+      if (idIndex === -1) {
+        contentDiv.innerHTML = `<div class="error">⚠️ 'id' column not found in sheet. Headers: ${headers.join(', ')}</div>`;
+        return;
+      }
 
-              contentDiv.innerHTML = `
-                <div class="status-card">
-                  <div class="field">
-                    <div class="label">Last cleaned</div>
-                    <div class="value">${lastCleaned}</div>
-                  </div>
-                  <div class="field">
-                    <div class="label">Next scheduled</div>
-                    <div class="value">${nextDue}</div>
-                  </div>
-                  <div class="field">
-                    <div class="label">Status</div>
-                    <div class="value">${status}</div>
-                  </div>
-                </div>
-              `;
-              found = true;
-              break;
-            }
-          }
+      let found = false;
+      // Нормализуем введенный ID для сравнения
+      const normalizedSearchId = machineId.toString().trim().toLowerCase();
+      
+      for (let i = 1; i < lines.length; i++) {
+        const row = parseCSVLine(lines[i]);
+        
+        // ФИКС 6: Безопасное получение значения ID с нормализацией
+        const rowId = row[idIndex] ? row[idIndex].toString().trim().toLowerCase() : '';
+        
+        // ФИКС 7: Более гибкое сравнение (учитываем пробелы, регистр, тип данных)
+        if (rowId && rowId === normalizedSearchId) {
+          // Безопасно получаем значения с проверкой индексов
+          const lastCleaned = (lastCleanedIndex !== -1 && row[lastCleanedIndex]) ? row[lastCleanedIndex] : '—';
+          const nextDue = (nextDueIndex !== -1 && row[nextDueIndex]) ? row[nextDueIndex] : '—';
+          const status = (statusIndex !== -1 && row[statusIndex]) ? row[statusIndex] : 'Unknown';
 
-          if (!found) {
-            contentDiv.innerHTML = `<div class="error">⚠️ Machine ID "${machineId}" not found.</div>`;
-          }
-        })
-        .catch(err => {
-          console.error('Error:', err);
-          contentDiv.innerHTML = `<div class="error">❌ Failed to load data.</div>`;
-        });
-    }
-  </script>
-</body>
-</html>
+          contentDiv.innerHTML = `
+            <div class="status-card">
+              <div class="field">
+                <div class="label">Machine ID</div>
+                <div class="value">${rowId}</div>
+              </div>
+              <div class="field">
+                <div class="label">Last cleaned</div>
+                <div class="value">${lastCleaned}</div>
+              </div>
+              <div class="field">
+                <div class="label">Next scheduled</div>
+                <div class="value">${nextDue}</div>
+              </div>
+              <div class="field">
+                <div class="label">Status</div>
+                <div class="value">${status}</div>
+              </div>
+            </div>
+          `;
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
+        contentDiv.innerHTML = `<div class="error">⚠️ Machine ID "${machineId}" not found.</div>`;
+      }
+    })
+    .catch(err => {
+      console.error('Error:', err);
+      contentDiv.innerHTML = `<div class="error">❌ Failed to load data.<br>${err.message}</div>`;
+    });
+}
