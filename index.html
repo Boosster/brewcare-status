@@ -58,27 +58,9 @@ const contentDiv = document.getElementById('content');
 if (!machineId) {
   contentDiv.innerHTML = `<div class="error">❌ Machine ID not specified.<br>Use: ?id=your-machine-id</div>`;
 } else {
-  // ВАЖНО: Правильно формируем URL с антикэш параметром
-  const cacheBuster = Date.now();
-  // Убираем &_= и используем просто параметр
-  const fetchUrl = `${SHEET_URL}&nocache=${cacheBuster}`;
-  
-  console.log('Fetching URL:', fetchUrl); // Для отладки
-  
-  fetch(fetchUrl)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return response.text();
-    })
+  fetch(`${SHEET_URL}&nocache=${Date.now()}`)
+    .then(response => response.text())
     .then(csv => {
-      console.log('CSV received, length:', csv.length); // Для отладки
-      
-      if (csv.trim().startsWith('<!DOCTYPE html>')) {
-        throw new Error('Received HTML instead of CSV');
-      }
-
       const lines = csv.trim().split('\n');
       if (lines.length < 2) {
         contentDiv.innerHTML = `<div class="error">⚠️ No data in sheet.</div>`;
@@ -94,31 +76,21 @@ if (!machineId) {
           if (char === '"') {
             inQuotes = !inQuotes;
           } else if (char === ',' && !inQuotes) {
-            result.push(currentCell.replace(/^"|"$/g, '').trim());
+            result.push(currentCell);
             currentCell = '';
           } else {
             currentCell += char;
           }
         }
-        result.push(currentCell.replace(/^"|"$/g, '').trim());
+        result.push(currentCell);
         return result;
       }
 
       const headers = parseCSVLine(lines[0]);
-      console.log('Found headers:', headers);
-      
-      // Ищем колонки без учета регистра и лишних пробелов
-      const idIndex = headers.findIndex(h => h.toLowerCase().replace(/[^a-z]/g, '') === 'id');
-      const lastCleanedIndex = headers.findIndex(h => h.toLowerCase().replace(/[^a-z_]/g, '') === 'last_cleaned');
-      const nextDueIndex = headers.findIndex(h => h.toLowerCase().replace(/[^a-z_]/g, '') === 'next_due');
-      const statusIndex = headers.findIndex(h => h.toLowerCase().replace(/[^a-z]/g, '') === 'status');
-
-      console.log('Indices:', { idIndex, lastCleanedIndex, nextDueIndex, statusIndex });
-
-      if (idIndex === -1) {
-        contentDiv.innerHTML = `<div class="error">⚠️ 'id' column not found. Headers: ${headers.join(' | ')}</div>`;
-        return;
-      }
+      const idIndex = 0; // Первая колонка - ID
+      const lastCleanedIndex = 1;
+      const nextDueIndex = 2;
+      const statusIndex = 3;
 
       let found = false;
       const normalizedSearchId = machineId.toString().trim();
@@ -127,12 +99,15 @@ if (!machineId) {
         if (!lines[i].trim()) continue;
         
         const row = parseCSVLine(lines[i]);
-        const rowId = row[idIndex] ? row[idIndex].toString().trim() : '';
         
-        if (rowId && rowId === normalizedSearchId) {
-          const lastCleaned = (lastCleanedIndex !== -1 && row[lastCleanedIndex]) ? row[lastCleanedIndex] : '—';
-          const nextDue = (nextDueIndex !== -1 && row[nextDueIndex]) ? row[nextDueIndex] : '—';
-          const status = (statusIndex !== -1 && row[statusIndex]) ? row[statusIndex] : 'Unknown';
+        // СПЕЦИАЛЬНО для вашего формата: убираем "id = " из значения
+        let rowId = row[idIndex] ? row[idIndex].toString().trim() : '';
+        rowId = rowId.replace(/^id\s*=\s*/i, ''); // Удаляем "id = " в начале
+        
+        if (rowId === normalizedSearchId) {
+          const lastCleaned = row[lastCleanedIndex] || '—';
+          const nextDue = row[nextDueIndex] || '—';
+          const status = row[statusIndex] || 'Unknown';
 
           contentDiv.innerHTML = `
             <div class="status-card">
@@ -164,7 +139,7 @@ if (!machineId) {
       }
     })
     .catch(err => {
-      console.error('Full error:', err);
+      console.error('Error:', err);
       contentDiv.innerHTML = `<div class="error">❌ Failed to load data.<br>${err.message}</div>`;
     });
 }
